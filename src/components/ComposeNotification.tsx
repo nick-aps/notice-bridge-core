@@ -185,15 +185,14 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
 
           <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30">
             <div className="space-y-0.5">
-              <Label htmlFor="acknowledgement" className="text-base">
+              <div className="text-base font-medium">
                 Require Acknowledgement
-              </Label>
+              </div>
               <p className="text-sm text-muted-foreground">
                 Employees must confirm they've read this notification
               </p>
             </div>
             <Switch
-              id="acknowledgement"
               checked={requiresAcknowledgement}
               onCheckedChange={setRequiresAcknowledgement}
             />
