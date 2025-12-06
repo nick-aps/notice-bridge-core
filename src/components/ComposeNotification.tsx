@@ -5,8 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Mail, MessageSquare, Bell, Send, Save, TestTube, Loader2 } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Mail, MessageSquare, Bell, Send, Save, TestTube, Loader2, Clock, CalendarIcon, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import type { Notification } from "./NotificationCenter";
 import { RecipientSelector, type Employee } from "./RecipientSelector";
 import { ChannelMessageEditors, type ChannelMessages } from "./ChannelMessageEditors";
@@ -42,6 +46,9 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
   const [selectedRecipients, setSelectedRecipients] = useState<Employee[]>([]);
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [deliveryType, setDeliveryType] = useState<"immediate" | "scheduled">("immediate");
+  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
+  const [scheduledTime, setScheduledTime] = useState("09:00");
 
   // Load drafts from localStorage
   useEffect(() => {
@@ -188,6 +195,15 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
       return;
     }
 
+    if (deliveryType === "scheduled" && !scheduledDate) {
+      toast({
+        title: "Schedule Required",
+        description: "Please select a date and time for scheduled delivery.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const recipientNames = selectedRecipients.map((r) => r.name);
 
     // Combine messages for storage (in production, would store separately per channel)
@@ -208,10 +224,21 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
       requiresAcknowledgement,
     });
 
-    toast({
-      title: "Notification Sent",
-      description: `Your notification has been sent to ${recipientNames.length} recipient(s) via ${channels.join(", ")}.`,
-    });
+    if (deliveryType === "scheduled" && scheduledDate) {
+      const [hours, minutes] = scheduledTime.split(":").map(Number);
+      const scheduledDateTime = new Date(scheduledDate);
+      scheduledDateTime.setHours(hours, minutes);
+
+      toast({
+        title: "Notification Scheduled",
+        description: `Your notification will be sent on ${format(scheduledDateTime, "PPP 'at' p")} to ${recipientNames.length} recipient(s).`,
+      });
+    } else {
+      toast({
+        title: "Notification Sent",
+        description: `Your notification has been sent to ${recipientNames.length} recipient(s) via ${channels.join(", ")}.`,
+      });
+    }
 
     // Reset form
     setTitle("");
@@ -219,6 +246,9 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
     setChannelMessages(initialMessages);
     setRequiresAcknowledgement(false);
     setSelectedRecipients([]);
+    setDeliveryType("immediate");
+    setScheduledDate(undefined);
+    setScheduledTime("09:00");
   };
 
   const resetForm = () => {
@@ -359,6 +389,109 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
               onRecipientsChange={setSelectedRecipients}
             />
 
+            {/* Delivery Time */}
+            <div className="space-y-4 p-4 rounded-lg border border-border bg-muted/30">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-muted-foreground" />
+                <Label className="text-base font-medium">Delivery Time</Label>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <Card
+                  className={cn(
+                    "cursor-pointer transition-all",
+                    deliveryType === "immediate"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50"
+                  )}
+                  onClick={() => setDeliveryType("immediate")}
+                >
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className={cn(
+                      "w-4 h-4 rounded-full border-2 flex items-center justify-center",
+                      deliveryType === "immediate" ? "border-primary" : "border-muted-foreground"
+                    )}>
+                      {deliveryType === "immediate" && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <Zap className="w-5 h-5 text-primary" />
+                    <div>
+                      <span className="font-medium">Send Immediately</span>
+                      <p className="text-xs text-muted-foreground">Deliver right away</p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card
+                  className={cn(
+                    "cursor-pointer transition-all",
+                    deliveryType === "scheduled"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50"
+                  )}
+                  onClick={() => setDeliveryType("scheduled")}
+                >
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className={cn(
+                      "w-4 h-4 rounded-full border-2 flex items-center justify-center",
+                      deliveryType === "scheduled" ? "border-primary" : "border-muted-foreground"
+                    )}>
+                      {deliveryType === "scheduled" && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <CalendarIcon className="w-5 h-5 text-primary" />
+                    <div>
+                      <span className="font-medium">Schedule</span>
+                      <p className="text-xs text-muted-foreground">Choose date & time</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {deliveryType === "scheduled" && (
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "w-[200px] justify-start text-left font-normal",
+                          !scheduledDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {scheduledDate ? format(scheduledDate, "PPP") : "Select date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-popover" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={scheduledDate}
+                        onSelect={setScheduledDate}
+                        disabled={(date) => date < new Date()}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="time" className="text-sm text-muted-foreground">at</Label>
+                    <Input
+                      id="time"
+                      type="time"
+                      value={scheduledTime}
+                      onChange={(e) => setScheduledTime(e.target.value)}
+                      className="w-[130px]"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30">
               <div className="space-y-0.5">
                 <div className="text-base font-medium">
@@ -377,8 +510,17 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-3">
               <Button type="submit" className="flex-1" size="lg">
-                <Send className="w-4 h-4 mr-2" />
-                Send Notification
+                {deliveryType === "scheduled" ? (
+                  <>
+                    <CalendarIcon className="w-4 h-4 mr-2" />
+                    Schedule Notification
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 mr-2" />
+                    Send Notification
+                  </>
+                )}
               </Button>
               
               <div className="flex gap-3">
