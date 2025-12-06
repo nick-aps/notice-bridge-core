@@ -4,7 +4,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Mail, Bell, MessageSquare, Paperclip, X, Bold, Italic, Link, List } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Mail, Bell, MessageSquare, Paperclip, X, Bold, Italic, Link, List, Database, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface ChannelMessages {
@@ -124,8 +129,75 @@ export const ChannelMessageEditors = ({
     }
   };
 
+  const insertPlaceholder = (channel: "email" | "portal" | "sms", placeholder: string) => {
+    const tag = `{{${placeholder}}}`;
+    if (channel === "email") {
+      updateEmailContent(messages.email.content + tag);
+    } else if (channel === "portal") {
+      updatePortalContent(messages.portal.content + tag);
+    } else {
+      const newContent = messages.sms.content + tag;
+      if (newContent.length <= SMS_CHAR_LIMIT) {
+        updateSmsContent(newContent);
+      }
+    }
+  };
+
+  const availableFields = [
+    { key: "name", label: "Full Name", description: "Employee's full name" },
+    { key: "first_name", label: "First Name", description: "Employee's first name" },
+    { key: "last_name", label: "Last Name", description: "Employee's last name" },
+    { key: "email", label: "Email", description: "Employee's email address" },
+    { key: "role", label: "Role", description: "Job title or role" },
+    { key: "department", label: "Department", description: "Department name" },
+    { key: "location", label: "Location", description: "Office location" },
+    { key: "manager", label: "Manager", description: "Direct manager's name" },
+    { key: "employee_id", label: "Employee ID", description: "Unique employee identifier" },
+    { key: "start_date", label: "Start Date", description: "Employment start date" },
+  ];
+
+  const FieldPlaceholderButton = ({ channel }: { channel: "email" | "portal" | "sms" }) => (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1 text-xs"
+        >
+          <Database className="w-3.5 h-3.5" />
+          Insert Field
+          <ChevronDown className="w-3 h-3" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-2 bg-popover" align="start">
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground px-2 py-1">
+            Database Fields
+          </p>
+          {availableFields.map((field) => (
+            <button
+              key={field.key}
+              type="button"
+              onClick={() => insertPlaceholder(channel, field.key)}
+              className="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-muted flex items-center justify-between group"
+            >
+              <div>
+                <span className="font-medium">{field.label}</span>
+                <p className="text-xs text-muted-foreground">{field.description}</p>
+              </div>
+              <code className="text-xs bg-muted px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                {`{{${field.key}}}`}
+              </code>
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+
   const RichTextToolbar = ({ channel }: { channel: "email" | "portal" }) => (
-    <div className="flex items-center gap-1 p-2 border-b border-border bg-muted/30">
+    <div className="flex items-center gap-1 p-2 border-b border-border bg-muted/30 flex-wrap">
       <Button
         type="button"
         variant="ghost"
@@ -166,7 +238,9 @@ export const ChannelMessageEditors = ({
       >
         <List className="w-3.5 h-3.5" />
       </Button>
-      <span className="text-xs text-muted-foreground ml-2">HTML supported</span>
+      <div className="w-px h-5 bg-border mx-1" />
+      <FieldPlaceholderButton channel={channel} />
+      <span className="text-xs text-muted-foreground ml-auto">HTML supported</span>
     </div>
   );
 
@@ -283,10 +357,13 @@ export const ChannelMessageEditors = ({
       const remaining = SMS_CHAR_LIMIT - messages.sms.content.length;
       return (
         <div className="space-y-3">
-          <Label className="flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-accent" />
-            SMS Message *
-          </Label>
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-accent" />
+              SMS Message *
+            </Label>
+            <FieldPlaceholderButton channel="sms" />
+          </div>
           <div className="relative">
             <Textarea
               placeholder="Enter SMS message (max 160 characters)..."
@@ -407,6 +484,9 @@ export const ChannelMessageEditors = ({
 
       {validActiveTab === "sms" && channels.includes("sms") && (
         <div className="space-y-3 mt-4">
+          <div className="flex justify-end">
+            <FieldPlaceholderButton channel="sms" />
+          </div>
           <div className="relative">
             <Textarea
               placeholder="Enter SMS message (max 160 characters)..."
