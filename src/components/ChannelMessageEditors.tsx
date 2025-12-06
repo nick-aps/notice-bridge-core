@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useRef } from "react";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Mail, Bell, MessageSquare, Paperclip, X, Bold, Italic, Link, List, Database, ChevronDown } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export interface ChannelMessages {
   email: { content: string; attachments: File[] };
@@ -31,12 +30,8 @@ export const ChannelMessageEditors = ({
   messages,
   onMessagesChange,
 }: ChannelMessageEditorsProps) => {
-  const [activeTab, setActiveTab] = useState<"email" | "sms" | "portal">(channels[0] || "email");
   const emailFileInputRef = useRef<HTMLInputElement>(null);
   const portalFileInputRef = useRef<HTMLInputElement>(null);
-
-  // Ensure active tab is valid when channels change
-  const validActiveTab = channels.includes(activeTab) ? activeTab : channels[0];
 
   if (channels.length === 0) {
     return (
@@ -385,70 +380,25 @@ export const ChannelMessageEditors = ({
     }
   }
 
-  // Multiple channels - use custom tabs (no Radix)
+  // Multiple channels - show all at once
   return (
-    <div className="space-y-3">
+    <div className="space-y-6">
       <Label>Channel Messages *</Label>
-      
-      {/* Custom Tab List */}
-      <div className="inline-flex h-10 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground">
-        {channels.includes("email") && (
-          <button
-            type="button"
-            onClick={() => setActiveTab("email")}
-            className={cn(
-              "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all",
-              validActiveTab === "email"
-                ? "bg-background text-foreground shadow-sm"
-                : "hover:bg-background/50"
-            )}
-          >
-            <Mail className="w-4 h-4" />
-            Email
-          </button>
-        )}
-        {channels.includes("portal") && (
-          <button
-            type="button"
-            onClick={() => setActiveTab("portal")}
-            className={cn(
-              "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all",
-              validActiveTab === "portal"
-                ? "bg-background text-foreground shadow-sm"
-                : "hover:bg-background/50"
-            )}
-          >
-            <Bell className="w-4 h-4" />
-            Portal
-          </button>
-        )}
-        {channels.includes("sms") && (
-          <button
-            type="button"
-            onClick={() => setActiveTab("sms")}
-            className={cn(
-              "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all",
-              validActiveTab === "sms"
-                ? "bg-background text-foreground shadow-sm"
-                : "hover:bg-background/50"
-            )}
-          >
-            <MessageSquare className="w-4 h-4" />
-            SMS
-          </button>
-        )}
-      </div>
 
-      {/* Tab Content */}
-      {validActiveTab === "email" && channels.includes("email") && (
-        <div className="space-y-3 mt-4">
+      {/* Email Section */}
+      {channels.includes("email") && (
+        <div className="space-y-3 p-4 rounded-lg border border-border bg-card">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Mail className="w-4 h-4 text-primary" />
+            Email Message
+          </div>
           <Card className="overflow-hidden">
             <RichTextToolbar channel="email" />
             <Textarea
               placeholder="Compose your email message with HTML formatting..."
               value={messages.email.content}
               onChange={(e) => updateEmailContent(e.target.value)}
-              rows={6}
+              rows={5}
               className="border-0 rounded-none focus-visible:ring-0"
             />
           </Card>
@@ -461,15 +411,20 @@ export const ChannelMessageEditors = ({
         </div>
       )}
 
-      {validActiveTab === "portal" && channels.includes("portal") && (
-        <div className="space-y-3 mt-4">
+      {/* Portal Section */}
+      {channels.includes("portal") && (
+        <div className="space-y-3 p-4 rounded-lg border border-border bg-card">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Bell className="w-4 h-4 text-primary" />
+            Portal Message
+          </div>
           <Card className="overflow-hidden">
             <RichTextToolbar channel="portal" />
             <Textarea
               placeholder="Compose your portal notification with HTML formatting..."
               value={messages.portal.content}
               onChange={(e) => updatePortalContent(e.target.value)}
-              rows={6}
+              rows={5}
               className="border-0 rounded-none focus-visible:ring-0"
             />
           </Card>
@@ -482,9 +437,14 @@ export const ChannelMessageEditors = ({
         </div>
       )}
 
-      {validActiveTab === "sms" && channels.includes("sms") && (
-        <div className="space-y-3 mt-4">
-          <div className="flex justify-end">
+      {/* SMS Section */}
+      {channels.includes("sms") && (
+        <div className="space-y-3 p-4 rounded-lg border border-border bg-card">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <MessageSquare className="w-4 h-4 text-accent" />
+              SMS Message
+            </div>
             <FieldPlaceholderButton channel="sms" />
           </div>
           <div className="relative">
