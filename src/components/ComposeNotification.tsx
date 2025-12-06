@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Mail, MessageSquare, Bell, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Notification } from "./NotificationCenter";
+import { RecipientSelector, type Employee } from "./RecipientSelector";
 
 interface ComposeNotificationProps {
   onSend: (notification: Omit<Notification, "id" | "status" | "sentAt">) => void;
@@ -20,25 +21,11 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
   const [message, setMessage] = useState("");
   const [channels, setChannels] = useState<("email" | "sms" | "portal")[]>([]);
   const [requiresAcknowledgement, setRequiresAcknowledgement] = useState(false);
-  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
-
-  const recipientGroups = [
-    { id: "all", label: "All Employees" },
-    { id: "it", label: "IT Department" },
-    { id: "ops", label: "Operations Team" },
-    { id: "sales", label: "Sales Team" },
-    { id: "hr", label: "HR Department" },
-  ];
+  const [selectedRecipients, setSelectedRecipients] = useState<Employee[]>([]);
 
   const handleChannelToggle = (channel: "email" | "sms" | "portal") => {
     setChannels((prev) =>
       prev.includes(channel) ? prev.filter((c) => c !== channel) : [...prev, channel]
-    );
-  };
-
-  const handleRecipientToggle = (recipientId: string) => {
-    setSelectedRecipients((prev) =>
-      prev.includes(recipientId) ? prev.filter((r) => r !== recipientId) : [...prev, recipientId]
     );
   };
 
@@ -54,21 +41,19 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
       return;
     }
 
-    const recipientLabels = selectedRecipients.map(
-      (id) => recipientGroups.find((g) => g.id === id)?.label || id
-    );
+    const recipientNames = selectedRecipients.map((r) => r.name);
 
     onSend({
       title,
       message,
       channels,
-      recipients: recipientLabels,
+      recipients: recipientNames,
       requiresAcknowledgement,
     });
 
     toast({
       title: "Notification Sent",
-      description: `Your notification has been sent to ${recipientLabels.join(", ")} via ${channels.join(", ")}.`,
+      description: `Your notification has been sent to ${recipientNames.length} recipient(s) via ${channels.join(", ")}.`,
     });
 
     // Reset form
@@ -162,26 +147,10 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
             </div>
           </div>
 
-          <div className="space-y-3">
-            <Label>Recipients *</Label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {recipientGroups.map((group) => (
-                <div key={group.id} className="flex items-center space-x-2 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
-                  <Checkbox
-                    id={group.id}
-                    checked={selectedRecipients.includes(group.id)}
-                    onCheckedChange={() => handleRecipientToggle(group.id)}
-                  />
-                  <label
-                    htmlFor={group.id}
-                    className="text-sm font-medium leading-none cursor-pointer flex-1 peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    {group.label}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
+          <RecipientSelector
+            selectedRecipients={selectedRecipients}
+            onRecipientsChange={setSelectedRecipients}
+          />
 
           <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30">
             <div className="space-y-0.5">
