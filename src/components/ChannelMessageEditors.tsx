@@ -1,12 +1,11 @@
 import { useState, useRef } from "react";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@/components/ui/card";
 import { Mail, Bell, MessageSquare, Paperclip, X, Bold, Italic, Link, List } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface ChannelMessages {
   email: { content: string; attachments: File[] };
@@ -27,8 +26,12 @@ export const ChannelMessageEditors = ({
   messages,
   onMessagesChange,
 }: ChannelMessageEditorsProps) => {
+  const [activeTab, setActiveTab] = useState<"email" | "sms" | "portal">(channels[0] || "email");
   const emailFileInputRef = useRef<HTMLInputElement>(null);
   const portalFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Ensure active tab is valid when channels change
+  const validActiveTab = channels.includes(activeTab) ? activeTab : channels[0];
 
   if (channels.length === 0) {
     return (
@@ -109,13 +112,10 @@ export const ChannelMessageEditors = ({
 
   const insertHtmlTag = (
     channel: "email" | "portal",
-    tag: string,
-    wrapper?: { open: string; close: string }
+    wrapper: { open: string; close: string }
   ) => {
     const content = channel === "email" ? messages.email.content : messages.portal.content;
-    const newContent = wrapper
-      ? `${content}${wrapper.open}${wrapper.close}`
-      : `${content}<${tag}></${tag}>`;
+    const newContent = `${content}${wrapper.open}${wrapper.close}`;
 
     if (channel === "email") {
       updateEmailContent(newContent);
@@ -131,7 +131,7 @@ export const ChannelMessageEditors = ({
         variant="ghost"
         size="sm"
         className="h-7 w-7 p-0"
-        onClick={() => insertHtmlTag(channel, "strong", { open: "<strong>", close: "</strong>" })}
+        onClick={() => insertHtmlTag(channel, { open: "<strong>", close: "</strong>" })}
         title="Bold"
       >
         <Bold className="w-3.5 h-3.5" />
@@ -141,7 +141,7 @@ export const ChannelMessageEditors = ({
         variant="ghost"
         size="sm"
         className="h-7 w-7 p-0"
-        onClick={() => insertHtmlTag(channel, "em", { open: "<em>", close: "</em>" })}
+        onClick={() => insertHtmlTag(channel, { open: "<em>", close: "</em>" })}
         title="Italic"
       >
         <Italic className="w-3.5 h-3.5" />
@@ -151,9 +151,7 @@ export const ChannelMessageEditors = ({
         variant="ghost"
         size="sm"
         className="h-7 w-7 p-0"
-        onClick={() =>
-          insertHtmlTag(channel, "a", { open: '<a href="">', close: "</a>" })
-        }
+        onClick={() => insertHtmlTag(channel, { open: '<a href="">', close: "</a>" })}
         title="Link"
       >
         <Link className="w-3.5 h-3.5" />
@@ -163,9 +161,7 @@ export const ChannelMessageEditors = ({
         variant="ghost"
         size="sm"
         className="h-7 w-7 p-0"
-        onClick={() =>
-          insertHtmlTag(channel, "ul", { open: "<ul>\n  <li>", close: "</li>\n</ul>" })
-        }
+        onClick={() => insertHtmlTag(channel, { open: "<ul>\n  <li>", close: "</li>\n</ul>" })}
         title="List"
       >
         <List className="w-3.5 h-3.5" />
@@ -225,7 +221,7 @@ export const ChannelMessageEditors = ({
     </div>
   );
 
-  // If only one channel, show directly without tabs
+  // Single channel - show directly
   if (channels.length === 1) {
     const channel = channels[0];
 
@@ -312,100 +308,128 @@ export const ChannelMessageEditors = ({
     }
   }
 
-  // Multiple channels - use tabs
+  // Multiple channels - use custom tabs (no Radix)
   return (
     <div className="space-y-3">
       <Label>Channel Messages *</Label>
-      <Tabs defaultValue={channels[0]} className="w-full">
-        <TabsList className="w-full justify-start">
-          {channels.includes("email") && (
-            <TabsTrigger value="email" className="gap-2">
-              <Mail className="w-4 h-4" />
-              Email
-            </TabsTrigger>
-          )}
-          {channels.includes("portal") && (
-            <TabsTrigger value="portal" className="gap-2">
-              <Bell className="w-4 h-4" />
-              Portal
-            </TabsTrigger>
-          )}
-          {channels.includes("sms") && (
-            <TabsTrigger value="sms" className="gap-2">
-              <MessageSquare className="w-4 h-4" />
-              SMS
-            </TabsTrigger>
-          )}
-        </TabsList>
-
+      
+      {/* Custom Tab List */}
+      <div className="inline-flex h-10 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground">
         {channels.includes("email") && (
-          <TabsContent value="email" className="space-y-3 mt-4">
-            <Card className="overflow-hidden">
-              <RichTextToolbar channel="email" />
-              <Textarea
-                placeholder="Compose your email message with HTML formatting..."
-                value={messages.email.content}
-                onChange={(e) => updateEmailContent(e.target.value)}
-                rows={6}
-                className="border-0 rounded-none focus-visible:ring-0"
-              />
-            </Card>
-            <AttachmentSection
-              attachments={messages.email.attachments}
-              onRemove={removeEmailAttachment}
-              onAdd={handleEmailAttachment}
-              inputRef={emailFileInputRef}
-            />
-          </TabsContent>
+          <button
+            type="button"
+            onClick={() => setActiveTab("email")}
+            className={cn(
+              "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all",
+              validActiveTab === "email"
+                ? "bg-background text-foreground shadow-sm"
+                : "hover:bg-background/50"
+            )}
+          >
+            <Mail className="w-4 h-4" />
+            Email
+          </button>
         )}
-
         {channels.includes("portal") && (
-          <TabsContent value="portal" className="space-y-3 mt-4">
-            <Card className="overflow-hidden">
-              <RichTextToolbar channel="portal" />
-              <Textarea
-                placeholder="Compose your portal notification with HTML formatting..."
-                value={messages.portal.content}
-                onChange={(e) => updatePortalContent(e.target.value)}
-                rows={6}
-                className="border-0 rounded-none focus-visible:ring-0"
-              />
-            </Card>
-            <AttachmentSection
-              attachments={messages.portal.attachments}
-              onRemove={removePortalAttachment}
-              onAdd={handlePortalAttachment}
-              inputRef={portalFileInputRef}
-            />
-          </TabsContent>
+          <button
+            type="button"
+            onClick={() => setActiveTab("portal")}
+            className={cn(
+              "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all",
+              validActiveTab === "portal"
+                ? "bg-background text-foreground shadow-sm"
+                : "hover:bg-background/50"
+            )}
+          >
+            <Bell className="w-4 h-4" />
+            Portal
+          </button>
         )}
-
         {channels.includes("sms") && (
-          <TabsContent value="sms" className="space-y-3 mt-4">
-            <div className="relative">
-              <Textarea
-                placeholder="Enter SMS message (max 160 characters)..."
-                value={messages.sms.content}
-                onChange={(e) => updateSmsContent(e.target.value)}
-                rows={3}
-                maxLength={SMS_CHAR_LIMIT}
-              />
-              <div
-                className={`absolute bottom-2 right-2 text-xs ${
-                  SMS_CHAR_LIMIT - messages.sms.content.length < 20
-                    ? "text-warning"
-                    : "text-muted-foreground"
-                }`}
-              >
-                {SMS_CHAR_LIMIT - messages.sms.content.length} characters remaining
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              SMS messages are limited to 160 characters. No HTML or attachments supported.
-            </p>
-          </TabsContent>
+          <button
+            type="button"
+            onClick={() => setActiveTab("sms")}
+            className={cn(
+              "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all",
+              validActiveTab === "sms"
+                ? "bg-background text-foreground shadow-sm"
+                : "hover:bg-background/50"
+            )}
+          >
+            <MessageSquare className="w-4 h-4" />
+            SMS
+          </button>
         )}
-      </Tabs>
+      </div>
+
+      {/* Tab Content */}
+      {validActiveTab === "email" && channels.includes("email") && (
+        <div className="space-y-3 mt-4">
+          <Card className="overflow-hidden">
+            <RichTextToolbar channel="email" />
+            <Textarea
+              placeholder="Compose your email message with HTML formatting..."
+              value={messages.email.content}
+              onChange={(e) => updateEmailContent(e.target.value)}
+              rows={6}
+              className="border-0 rounded-none focus-visible:ring-0"
+            />
+          </Card>
+          <AttachmentSection
+            attachments={messages.email.attachments}
+            onRemove={removeEmailAttachment}
+            onAdd={handleEmailAttachment}
+            inputRef={emailFileInputRef}
+          />
+        </div>
+      )}
+
+      {validActiveTab === "portal" && channels.includes("portal") && (
+        <div className="space-y-3 mt-4">
+          <Card className="overflow-hidden">
+            <RichTextToolbar channel="portal" />
+            <Textarea
+              placeholder="Compose your portal notification with HTML formatting..."
+              value={messages.portal.content}
+              onChange={(e) => updatePortalContent(e.target.value)}
+              rows={6}
+              className="border-0 rounded-none focus-visible:ring-0"
+            />
+          </Card>
+          <AttachmentSection
+            attachments={messages.portal.attachments}
+            onRemove={removePortalAttachment}
+            onAdd={handlePortalAttachment}
+            inputRef={portalFileInputRef}
+          />
+        </div>
+      )}
+
+      {validActiveTab === "sms" && channels.includes("sms") && (
+        <div className="space-y-3 mt-4">
+          <div className="relative">
+            <Textarea
+              placeholder="Enter SMS message (max 160 characters)..."
+              value={messages.sms.content}
+              onChange={(e) => updateSmsContent(e.target.value)}
+              rows={3}
+              maxLength={SMS_CHAR_LIMIT}
+            />
+            <div
+              className={`absolute bottom-2 right-2 text-xs ${
+                SMS_CHAR_LIMIT - messages.sms.content.length < 20
+                  ? "text-warning"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {SMS_CHAR_LIMIT - messages.sms.content.length} characters remaining
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            SMS messages are limited to 160 characters. No HTML or attachments supported.
+          </p>
+        </div>
+      )}
     </div>
   );
 };
