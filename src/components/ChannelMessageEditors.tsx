@@ -10,6 +10,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Mail, Bell, MessageSquare, Paperclip, X, Bold, Italic, Link, List, Database, ChevronDown } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export interface ChannelMessages {
   email: { content: string; attachments: File[] };
@@ -24,14 +25,32 @@ interface ChannelMessageEditorsProps {
 }
 
 const SMS_CHAR_LIMIT = 160;
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 export const ChannelMessageEditors = ({
   channels,
   messages,
   onMessagesChange,
 }: ChannelMessageEditorsProps) => {
+  const { toast } = useToast();
   const emailFileInputRef = useRef<HTMLInputElement>(null);
   const portalFileInputRef = useRef<HTMLInputElement>(null);
+
+  const validateFileSize = (files: File[]): { valid: File[]; rejected: string[] } => {
+    const valid: File[] = [];
+    const rejected: string[] = [];
+    
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        rejected.push(file.name);
+      } else {
+        valid.push(file);
+      }
+    }
+    
+    return { valid, rejected };
+  };
 
   if (channels.length === 0) {
     return (
@@ -68,25 +87,49 @@ export const ChannelMessageEditors = ({
 
   const handleEmailAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    onMessagesChange({
-      ...messages,
-      email: {
-        ...messages.email,
-        attachments: [...messages.email.attachments, ...files],
-      },
-    });
+    const { valid, rejected } = validateFileSize(files);
+    
+    if (rejected.length > 0) {
+      toast({
+        title: "File Too Large",
+        description: `${rejected.join(", ")} exceed${rejected.length === 1 ? "s" : ""} the ${MAX_FILE_SIZE_MB}MB limit.`,
+        variant: "destructive",
+      });
+    }
+    
+    if (valid.length > 0) {
+      onMessagesChange({
+        ...messages,
+        email: {
+          ...messages.email,
+          attachments: [...messages.email.attachments, ...valid],
+        },
+      });
+    }
     e.target.value = "";
   };
 
   const handlePortalAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    onMessagesChange({
-      ...messages,
-      portal: {
-        ...messages.portal,
-        attachments: [...messages.portal.attachments, ...files],
-      },
-    });
+    const { valid, rejected } = validateFileSize(files);
+    
+    if (rejected.length > 0) {
+      toast({
+        title: "File Too Large",
+        description: `${rejected.join(", ")} exceed${rejected.length === 1 ? "s" : ""} the ${MAX_FILE_SIZE_MB}MB limit.`,
+        variant: "destructive",
+      });
+    }
+    
+    if (valid.length > 0) {
+      onMessagesChange({
+        ...messages,
+        portal: {
+          ...messages.portal,
+          attachments: [...messages.portal.attachments, ...valid],
+        },
+      });
+    }
     e.target.value = "";
   };
 
