@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,16 +9,23 @@ import { Mail, MessageSquare, Bell, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Notification } from "./NotificationCenter";
 import { RecipientSelector, type Employee } from "./RecipientSelector";
+import { ChannelMessageEditors, type ChannelMessages } from "./ChannelMessageEditors";
 
 interface ComposeNotificationProps {
   onSend: (notification: Omit<Notification, "id" | "status" | "sentAt">) => void;
 }
 
+const initialMessages: ChannelMessages = {
+  email: { content: "", attachments: [] },
+  portal: { content: "", attachments: [] },
+  sms: { content: "" },
+};
+
 export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
   const { toast } = useToast();
   const [title, setTitle] = useState("");
-  const [message, setMessage] = useState("");
   const [channels, setChannels] = useState<("email" | "sms" | "portal")[]>([]);
+  const [channelMessages, setChannelMessages] = useState<ChannelMessages>(initialMessages);
   const [requiresAcknowledgement, setRequiresAcknowledgement] = useState(false);
   const [selectedRecipients, setSelectedRecipients] = useState<Employee[]>([]);
 
@@ -29,13 +35,22 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
     );
   };
 
+  const hasValidMessages = () => {
+    return channels.every((channel) => {
+      if (channel === "email") return channelMessages.email.content.trim().length > 0;
+      if (channel === "portal") return channelMessages.portal.content.trim().length > 0;
+      if (channel === "sms") return channelMessages.sms.content.trim().length > 0;
+      return false;
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!title || !message || channels.length === 0 || selectedRecipients.length === 0) {
+    if (!title || channels.length === 0 || selectedRecipients.length === 0 || !hasValidMessages()) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all required fields and select at least one channel and recipient.",
+        description: "Please fill in all required fields, select channels, add messages, and select recipients.",
         variant: "destructive",
       });
       return;
@@ -43,9 +58,19 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
 
     const recipientNames = selectedRecipients.map((r) => r.name);
 
+    // Combine messages for storage (in production, would store separately per channel)
+    const combinedMessage = channels
+      .map((ch) => {
+        if (ch === "email") return `[Email] ${channelMessages.email.content}`;
+        if (ch === "portal") return `[Portal] ${channelMessages.portal.content}`;
+        if (ch === "sms") return `[SMS] ${channelMessages.sms.content}`;
+        return "";
+      })
+      .join("\n\n");
+
     onSend({
       title,
-      message,
+      message: combinedMessage,
       channels,
       recipients: recipientNames,
       requiresAcknowledgement,
@@ -58,8 +83,8 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
 
     // Reset form
     setTitle("");
-    setMessage("");
     setChannels([]);
+    setChannelMessages(initialMessages);
     setRequiresAcknowledgement(false);
     setSelectedRecipients([]);
   };
@@ -85,18 +110,6 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="message">Message *</Label>
-            <Textarea
-              id="message"
-              placeholder="Enter your notification message..."
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={5}
-              required
-            />
-          </div>
-
           <div className="space-y-3">
             <Label>Delivery Channels *</Label>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -111,7 +124,10 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
                 <CardContent className="p-4 flex items-center gap-3">
                   <Checkbox checked={channels.includes("email")} />
                   <Mail className="w-5 h-5 text-primary" />
-                  <span className="font-medium">Email</span>
+                  <div>
+                    <span className="font-medium">Email</span>
+                    <p className="text-xs text-muted-foreground">HTML + Attachments</p>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -126,7 +142,10 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
                 <CardContent className="p-4 flex items-center gap-3">
                   <Checkbox checked={channels.includes("sms")} />
                   <MessageSquare className="w-5 h-5 text-accent" />
-                  <span className="font-medium">SMS</span>
+                  <div>
+                    <span className="font-medium">SMS</span>
+                    <p className="text-xs text-muted-foreground">160 char limit</p>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -141,11 +160,20 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
                 <CardContent className="p-4 flex items-center gap-3">
                   <Checkbox checked={channels.includes("portal")} />
                   <Bell className="w-5 h-5 text-primary" />
-                  <span className="font-medium">Portal</span>
+                  <div>
+                    <span className="font-medium">Portal</span>
+                    <p className="text-xs text-muted-foreground">HTML + Attachments</p>
+                  </div>
                 </CardContent>
               </Card>
             </div>
           </div>
+
+          <ChannelMessageEditors
+            channels={channels}
+            messages={channelMessages}
+            onMessagesChange={setChannelMessages}
+          />
 
           <RecipientSelector
             selectedRecipients={selectedRecipients}
