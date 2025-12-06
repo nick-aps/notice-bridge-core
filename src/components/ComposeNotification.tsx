@@ -137,11 +137,11 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
     });
   };
 
-  const handleSendTestEmail = async () => {
-    if (!channels.includes("email") || !channelMessages.email.content.trim()) {
+  const handleSendTestNotification = async () => {
+    if (channels.length === 0 || !hasValidMessages()) {
       toast({
-        title: "No Email Content",
-        description: "Please select email channel and add email content to send a test.",
+        title: "No Content to Test",
+        description: "Please select at least one channel and add message content.",
         variant: "destructive",
       });
       return;
@@ -149,14 +149,30 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
 
     setIsSendingTest(true);
 
-    // Simulate sending test email (in production, this would call an edge function)
+    // Simulate sending test notifications (in production, this would call edge functions)
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     setIsSendingTest(false);
 
+    const channelResults = channels.map((ch) => {
+      if (ch === "email") return "📧 Email sent to your inbox";
+      if (ch === "sms") return "📱 SMS sent to your phone";
+      if (ch === "portal") return "🔔 Portal notification displayed";
+      return "";
+    });
+
     toast({
-      title: "Test Email Sent",
-      description: "A test email has been sent to your email address (mock). Connect to Lovable Cloud to enable real email sending.",
+      title: "Test Notification Sent",
+      description: (
+        <div className="mt-2 space-y-1">
+          {channelResults.map((result, i) => (
+            <div key={i} className="text-sm">{result}</div>
+          ))}
+          <p className="text-xs text-muted-foreground mt-2">
+            (Mock mode - Connect to Lovable Cloud for real delivery)
+          </p>
+        </div>
+      ),
     });
   };
 
@@ -381,15 +397,15 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
                   type="button"
                   variant="outline"
                   size="lg"
-                  onClick={handleSendTestEmail}
-                  disabled={!channels.includes("email") || !channelMessages.email.content.trim() || isSendingTest}
+                  onClick={handleSendTestNotification}
+                  disabled={channels.length === 0 || !hasValidMessages() || isSendingTest}
                 >
                   {isSendingTest ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
                     <TestTube className="w-4 h-4 mr-2" />
                   )}
-                  Test Email
+                  Test Notification
                 </Button>
               </div>
             </div>
