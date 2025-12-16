@@ -14,18 +14,7 @@ import {
 import { NotificationDetailModal } from "@/components/NotificationDetailModal";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-
-export interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  channels: ("email" | "sms" | "portal")[];
-  recipients: string[];
-  requiresAcknowledgement: boolean;
-  status: "sent" | "pending" | "failed";
-  sentAt: Date;
-  acknowledgedBy?: string[];
-}
+import type { Notification, AcknowledgementSettings, AcknowledgementResponse } from "@/components/NotificationCenter";
 
 // Mock data - in production this would come from a database
 const mockNotifications: Notification[] = [
@@ -36,6 +25,17 @@ const mockNotifications: Notification[] = [
     channels: ["email", "portal"],
     recipients: ["Alice Johnson", "Bob Smith", "Carol Williams", "David Brown", "Eva Martinez"],
     requiresAcknowledgement: true,
+    acknowledgementSettings: {
+      required: true,
+      responseOptions: ["Acknowledged", "Need more information", "Cannot attend"],
+      allowComments: true,
+      deadline: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
+    },
+    acknowledgementResponses: [
+      { recipientName: "Alice Johnson", selectedOption: "Acknowledged", respondedAt: new Date(Date.now() - 1 * 60 * 60 * 1000) },
+      { recipientName: "Bob Smith", selectedOption: "Acknowledged", comment: "Will bring Q3 report", respondedAt: new Date(Date.now() - 30 * 60 * 1000) },
+      { recipientName: "Carol Williams", selectedOption: "Cannot attend", comment: "On PTO that day", respondedAt: new Date(Date.now() - 45 * 60 * 1000) },
+    ],
     status: "sent",
     sentAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
     acknowledgedBy: ["Alice Johnson", "Bob Smith", "Carol Williams"],
@@ -57,6 +57,16 @@ const mockNotifications: Notification[] = [
     channels: ["portal"],
     recipients: ["Alice Johnson", "Bob Smith", "Carol Williams", "David Brown", "Eva Martinez", "Frank Garcia", "Grace Lee"],
     requiresAcknowledgement: true,
+    acknowledgementSettings: {
+      required: true,
+      responseOptions: ["Acknowledged and agree", "Have questions"],
+      allowComments: true,
+      deadline: new Date(Date.now() - 12 * 60 * 60 * 1000), // Overdue
+    },
+    acknowledgementResponses: [
+      { recipientName: "Alice Johnson", selectedOption: "Acknowledged and agree", respondedAt: new Date(Date.now() - 36 * 60 * 60 * 1000) },
+      { recipientName: "Bob Smith", selectedOption: "Have questions", comment: "Need clarification on section 3.2", respondedAt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    ],
     status: "sent",
     sentAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
     acknowledgedBy: ["Alice Johnson", "Bob Smith"],
@@ -78,6 +88,12 @@ const mockNotifications: Notification[] = [
     channels: ["email", "portal"],
     recipients: ["IT Department", "Operations Team"],
     requiresAcknowledgement: true,
+    acknowledgementSettings: {
+      required: true,
+      responseOptions: ["Training completed", "In progress", "Need assistance"],
+      allowComments: false,
+      deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Next week
+    },
     status: "pending",
     sentAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
   },
