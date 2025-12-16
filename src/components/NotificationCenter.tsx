@@ -4,6 +4,19 @@ import { ComposeNotification } from "./ComposeNotification";
 import { Bell, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+export interface AcknowledgementSettings {
+  required: boolean;
+  responseOptions: string[];
+  allowComments: boolean;
+}
+
+export interface AcknowledgementResponse {
+  recipientName: string;
+  selectedOption: string;
+  comment?: string;
+  respondedAt: Date;
+}
+
 export interface Notification {
   id: string;
   title: string;
@@ -11,6 +24,8 @@ export interface Notification {
   channels: ("email" | "sms" | "portal")[];
   recipients: string[];
   requiresAcknowledgement: boolean;
+  acknowledgementSettings?: AcknowledgementSettings;
+  acknowledgementResponses?: AcknowledgementResponse[];
   status: "sent" | "pending" | "failed";
   sentAt: Date;
   acknowledgedBy?: string[];

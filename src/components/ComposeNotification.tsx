@@ -7,11 +7,11 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Mail, MessageSquare, Bell, Send, Save, TestTube, Loader2, Clock, CalendarIcon, Zap } from "lucide-react";
+import { Mail, MessageSquare, Bell, Send, Save, TestTube, Loader2, Clock, CalendarIcon, Zap, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import type { Notification } from "./NotificationCenter";
+import type { Notification, AcknowledgementSettings } from "./NotificationCenter";
 import { RecipientSelector, type Employee } from "./RecipientSelector";
 import { ChannelMessageEditors, type ChannelMessages } from "./ChannelMessageEditors";
 
@@ -26,6 +26,8 @@ interface Draft {
   channelMessages: ChannelMessages;
   recipients: Employee[];
   requiresAcknowledgement: boolean;
+  acknowledgementOptions: string[];
+  allowAcknowledgementComments: boolean;
   savedAt: string;
 }
 
@@ -36,6 +38,7 @@ const initialMessages: ChannelMessages = {
 };
 
 const DRAFTS_STORAGE_KEY = "notification_drafts";
+const DEFAULT_ACKNOWLEDGEMENT_OPTIONS = ["Acknowledged", "Need more information", "Have questions"];
 
 export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
   const { toast } = useToast();
@@ -43,6 +46,9 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
   const [channels, setChannels] = useState<("email" | "sms" | "portal")[]>([]);
   const [channelMessages, setChannelMessages] = useState<ChannelMessages>(initialMessages);
   const [requiresAcknowledgement, setRequiresAcknowledgement] = useState(false);
+  const [acknowledgementOptions, setAcknowledgementOptions] = useState<string[]>(DEFAULT_ACKNOWLEDGEMENT_OPTIONS);
+  const [allowAcknowledgementComments, setAllowAcknowledgementComments] = useState(false);
+  const [newOptionText, setNewOptionText] = useState("");
   const [selectedRecipients, setSelectedRecipients] = useState<Employee[]>([]);
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -107,6 +113,8 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
       },
       recipients: selectedRecipients,
       requiresAcknowledgement,
+      acknowledgementOptions,
+      allowAcknowledgementComments,
       savedAt: new Date().toISOString(),
     };
 
@@ -126,6 +134,8 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
     setChannelMessages(draft.channelMessages);
     setSelectedRecipients(draft.recipients);
     setRequiresAcknowledgement(draft.requiresAcknowledgement);
+    setAcknowledgementOptions(draft.acknowledgementOptions || DEFAULT_ACKNOWLEDGEMENT_OPTIONS);
+    setAllowAcknowledgementComments(draft.allowAcknowledgementComments || false);
 
     toast({
       title: "Draft Loaded",
@@ -216,12 +226,21 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
       })
       .join("\n\n");
 
+    const acknowledgementSettings: AcknowledgementSettings | undefined = requiresAcknowledgement
+      ? {
+          required: true,
+          responseOptions: acknowledgementOptions,
+          allowComments: allowAcknowledgementComments,
+        }
+      : undefined;
+
     onSend({
       title,
       message: combinedMessage,
       channels,
       recipients: recipientNames,
       requiresAcknowledgement,
+      acknowledgementSettings,
     });
 
     if (deliveryType === "scheduled" && scheduledDate) {
@@ -245,6 +264,9 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
     setChannels([]);
     setChannelMessages(initialMessages);
     setRequiresAcknowledgement(false);
+    setAcknowledgementOptions(DEFAULT_ACKNOWLEDGEMENT_OPTIONS);
+    setAllowAcknowledgementComments(false);
+    setNewOptionText("");
     setSelectedRecipients([]);
     setDeliveryType("immediate");
     setScheduledDate(undefined);
@@ -256,7 +278,24 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
     setChannels([]);
     setChannelMessages(initialMessages);
     setRequiresAcknowledgement(false);
+    setAcknowledgementOptions(DEFAULT_ACKNOWLEDGEMENT_OPTIONS);
+    setAllowAcknowledgementComments(false);
+    setNewOptionText("");
     setSelectedRecipients([]);
+  };
+
+  const handleAddOption = () => {
+    const trimmed = newOptionText.trim();
+    if (trimmed && !acknowledgementOptions.includes(trimmed)) {
+      setAcknowledgementOptions([...acknowledgementOptions, trimmed]);
+      setNewOptionText("");
+    }
+  };
+
+  const handleRemoveOption = (optionToRemove: string) => {
+    if (acknowledgementOptions.length > 1) {
+      setAcknowledgementOptions(acknowledgementOptions.filter(opt => opt !== optionToRemove));
+    }
   };
 
   return (
@@ -493,19 +532,91 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
             </div>
 
             {(channels.includes("email") || channels.includes("portal")) && (
-              <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30">
-                <div className="space-y-0.5">
-                  <div className="text-base font-medium">
-                    Require Acknowledgement
+              <div className="space-y-4 p-4 rounded-lg border border-border bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <div className="text-base font-medium">
+                      Require Acknowledgement
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Employees must respond to this notification
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Employees must confirm they've read this notification
-                  </p>
+                  <Switch
+                    checked={requiresAcknowledgement}
+                    onCheckedChange={setRequiresAcknowledgement}
+                  />
                 </div>
-                <Switch
-                  checked={requiresAcknowledgement}
-                  onCheckedChange={setRequiresAcknowledgement}
-                />
+
+                {requiresAcknowledgement && (
+                  <div className="space-y-4 pt-4 border-t border-border">
+                    {/* Response Options */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">Response Options</Label>
+                      <div className="space-y-2">
+                        {acknowledgementOptions.map((option, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-2 rounded-md bg-background border border-border"
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full border-2 border-muted-foreground" />
+                              <span className="text-sm">{option}</span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveOption(option)}
+                              disabled={acknowledgementOptions.length <= 1}
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Add custom option..."
+                          value={newOptionText}
+                          onChange={(e) => setNewOptionText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddOption();
+                            }
+                          }}
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAddOption}
+                          disabled={!newOptionText.trim()}
+                        >
+                          <Plus className="w-4 h-4 mr-1" />
+                          Add
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Allow Comments Toggle */}
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="space-y-0.5">
+                        <div className="text-sm font-medium">Allow Comments</div>
+                        <p className="text-xs text-muted-foreground">
+                          Recipients can add notes with their response
+                        </p>
+                      </div>
+                      <Switch
+                        checked={allowAcknowledgementComments}
+                        onCheckedChange={setAllowAcknowledgementComments}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
