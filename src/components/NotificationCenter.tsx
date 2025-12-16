@@ -8,6 +8,7 @@ export interface AcknowledgementSettings {
   required: boolean;
   responseOptions: string[];
   allowComments: boolean;
+  deadline?: Date;
 }
 
 export interface AcknowledgementResponse {

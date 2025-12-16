@@ -28,6 +28,7 @@ interface Draft {
   requiresAcknowledgement: boolean;
   acknowledgementOptions: string[];
   allowAcknowledgementComments: boolean;
+  acknowledgementDeadline?: string;
   savedAt: string;
 }
 
@@ -48,6 +49,7 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
   const [requiresAcknowledgement, setRequiresAcknowledgement] = useState(false);
   const [acknowledgementOptions, setAcknowledgementOptions] = useState<string[]>(DEFAULT_ACKNOWLEDGEMENT_OPTIONS);
   const [allowAcknowledgementComments, setAllowAcknowledgementComments] = useState(false);
+  const [acknowledgementDeadline, setAcknowledgementDeadline] = useState<Date | undefined>(undefined);
   const [newOptionText, setNewOptionText] = useState("");
   const [selectedRecipients, setSelectedRecipients] = useState<Employee[]>([]);
   const [isSendingTest, setIsSendingTest] = useState(false);
@@ -115,6 +117,7 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
       requiresAcknowledgement,
       acknowledgementOptions,
       allowAcknowledgementComments,
+      acknowledgementDeadline: acknowledgementDeadline?.toISOString(),
       savedAt: new Date().toISOString(),
     };
 
@@ -136,6 +139,7 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
     setRequiresAcknowledgement(draft.requiresAcknowledgement);
     setAcknowledgementOptions(draft.acknowledgementOptions || DEFAULT_ACKNOWLEDGEMENT_OPTIONS);
     setAllowAcknowledgementComments(draft.allowAcknowledgementComments || false);
+    setAcknowledgementDeadline(draft.acknowledgementDeadline ? new Date(draft.acknowledgementDeadline) : undefined);
 
     toast({
       title: "Draft Loaded",
@@ -231,6 +235,7 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
           required: true,
           responseOptions: acknowledgementOptions,
           allowComments: allowAcknowledgementComments,
+          deadline: acknowledgementDeadline,
         }
       : undefined;
 
@@ -266,6 +271,7 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
     setRequiresAcknowledgement(false);
     setAcknowledgementOptions(DEFAULT_ACKNOWLEDGEMENT_OPTIONS);
     setAllowAcknowledgementComments(false);
+    setAcknowledgementDeadline(undefined);
     setNewOptionText("");
     setSelectedRecipients([]);
     setDeliveryType("immediate");
@@ -280,6 +286,7 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
     setRequiresAcknowledgement(false);
     setAcknowledgementOptions(DEFAULT_ACKNOWLEDGEMENT_OPTIONS);
     setAllowAcknowledgementComments(false);
+    setAcknowledgementDeadline(undefined);
     setNewOptionText("");
     setSelectedRecipients([]);
   };
@@ -614,6 +621,57 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
                         checked={allowAcknowledgementComments}
                         onCheckedChange={setAllowAcknowledgementComments}
                       />
+                    </div>
+
+                    {/* Acknowledgement Deadline */}
+                    <div className="pt-2 border-t border-border">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <div className="text-sm font-medium">Response Deadline</div>
+                          <p className="text-xs text-muted-foreground">
+                            Set a due date for responses (reminders sent if overdue)
+                          </p>
+                        </div>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className={cn(
+                                "w-[160px] justify-start text-left font-normal",
+                                !acknowledgementDeadline && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {acknowledgementDeadline ? format(acknowledgementDeadline, "PP") : "No deadline"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0 bg-popover" align="end">
+                            <Calendar
+                              mode="single"
+                              selected={acknowledgementDeadline}
+                              onSelect={setAcknowledgementDeadline}
+                              disabled={(date) => date < new Date()}
+                              initialFocus
+                              className="p-3 pointer-events-auto"
+                            />
+                            {acknowledgementDeadline && (
+                              <div className="p-2 border-t border-border">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full text-muted-foreground"
+                                  onClick={() => setAcknowledgementDeadline(undefined)}
+                                >
+                                  Clear deadline
+                                </Button>
+                              </div>
+                            )}
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     </div>
                   </div>
                 )}

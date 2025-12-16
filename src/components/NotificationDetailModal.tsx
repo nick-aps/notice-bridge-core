@@ -8,8 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Mail, MessageSquare, Bell, CheckCircle2, XCircle, RefreshCw, Clock, MessageCircle } from "lucide-react";
+import { Mail, MessageSquare, Bell, CheckCircle2, XCircle, RefreshCw, Clock, MessageCircle, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import type { AcknowledgementSettings, AcknowledgementResponse } from "./NotificationCenter";
 
 interface Notification {
@@ -63,6 +64,12 @@ export const NotificationDetailModal = ({
 
   const hasResponseOptions = notification.acknowledgementSettings?.responseOptions?.length;
   const responses = notification.acknowledgementResponses || [];
+
+  // Deadline logic
+  const deadline = notification.acknowledgementSettings?.deadline
+    ? new Date(notification.acknowledgementSettings.deadline)
+    : null;
+  const isOverdue = deadline && new Date() > deadline && unacknowledgedRecipients.length > 0;
 
   // Group responses by selected option
   const responsesByOption = hasResponseOptions
@@ -119,12 +126,28 @@ export const NotificationDetailModal = ({
                     </Badge>
                   ))}
                 </div>
-                {notification.acknowledgementSettings!.allowComments && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <MessageCircle className="w-3 h-3" />
-                    Comments enabled
-                  </p>
-                )}
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  {notification.acknowledgementSettings!.allowComments && (
+                    <span className="flex items-center gap-1">
+                      <MessageCircle className="w-3 h-3" />
+                      Comments enabled
+                    </span>
+                  )}
+                  {deadline && (
+                    <span className={cn(
+                      "flex items-center gap-1",
+                      isOverdue && "text-destructive font-medium"
+                    )}>
+                      {isOverdue ? (
+                        <AlertTriangle className="w-3 h-3" />
+                      ) : (
+                        <Clock className="w-3 h-3" />
+                      )}
+                      Due: {format(deadline, "PP")}
+                      {isOverdue && " (Overdue)"}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
 
@@ -275,12 +298,23 @@ export const NotificationDetailModal = ({
             {needsReminder && (
               <>
                 <Separator />
-                <div className="p-4 rounded-lg bg-warning/5 border border-warning/20">
+                <div className={cn(
+                  "p-4 rounded-lg border",
+                  isOverdue
+                    ? "bg-destructive/5 border-destructive/20"
+                    : "bg-warning/5 border-warning/20"
+                )}>
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium">Send Reminder</p>
+                      <div className="flex items-center gap-2">
+                        {isOverdue && <AlertTriangle className="w-4 h-4 text-destructive" />}
+                        <p className="font-medium">
+                          {isOverdue ? "Overdue - Send Reminder" : "Send Reminder"}
+                        </p>
+                      </div>
                       <p className="text-sm text-muted-foreground">
-                        {unacknowledgedRecipients.length} recipient(s) haven't responded yet
+                        {unacknowledgedRecipients.length} recipient(s) haven't responded
+                        {isOverdue && deadline && ` (was due ${format(deadline, "PP")})`}
                       </p>
                     </div>
                     <Button
@@ -288,6 +322,7 @@ export const NotificationDetailModal = ({
                         onSendReminder(notification);
                         onOpenChange(false);
                       }}
+                      variant={isOverdue ? "destructive" : "default"}
                       className="gap-2"
                     >
                       <RefreshCw className="w-4 h-4" />
