@@ -1,8 +1,23 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Bell, Send, ArrowLeft, Eye, RefreshCw, Mail, MessageSquare, CheckCircle2, Clock, XCircle, Users } from "lucide-react";
+import { Bell, Send, ArrowLeft, Eye, RefreshCw, Mail, MessageSquare, CheckCircle2, Clock, XCircle, Users, Search, Filter, X, CalendarIcon, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Table,
   TableBody,
@@ -13,8 +28,9 @@ import {
 } from "@/components/ui/table";
 import { NotificationDetailModal } from "@/components/NotificationDetailModal";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
-import type { Notification, AcknowledgementSettings, AcknowledgementResponse } from "@/components/NotificationCenter";
+import { format, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
+import { cn } from "@/lib/utils";
+import type { Notification } from "@/components/NotificationCenter";
 
 // Mock data - in production this would come from a database
 const mockNotifications: Notification[] = [
@@ -29,7 +45,7 @@ const mockNotifications: Notification[] = [
       required: true,
       responseOptions: ["Acknowledged", "Need more information", "Cannot attend"],
       allowComments: true,
-      deadline: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
+      deadline: new Date(Date.now() + 24 * 60 * 60 * 1000),
     },
     acknowledgementResponses: [
       { recipientName: "Alice Johnson", selectedOption: "Acknowledged", respondedAt: new Date(Date.now() - 1 * 60 * 60 * 1000) },
@@ -61,7 +77,7 @@ const mockNotifications: Notification[] = [
       required: true,
       responseOptions: ["Acknowledged and agree", "Have questions"],
       allowComments: true,
-      deadline: new Date(Date.now() - 12 * 60 * 60 * 1000), // Overdue
+      deadline: new Date(Date.now() - 12 * 60 * 60 * 1000),
     },
     acknowledgementResponses: [
       { recipientName: "Alice Johnson", selectedOption: "Acknowledged and agree", respondedAt: new Date(Date.now() - 36 * 60 * 60 * 1000) },
@@ -92,18 +108,109 @@ const mockNotifications: Notification[] = [
       required: true,
       responseOptions: ["Training completed", "In progress", "Need assistance"],
       allowComments: false,
-      deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Next week
+      deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
     status: "pending",
     sentAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
   },
 ];
 
+type AckFilterType = "all" | "required" | "not-required" | "complete" | "pending" | "overdue";
+
 const History = () => {
   const { toast } = useToast();
   const [notifications] = useState<Notification[]>(mockNotifications);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [channelFilters, setChannelFilters] = useState<string[]>([]);
+  const [ackFilter, setAckFilter] = useState<AckFilterType>("all");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
+
+  const hasActiveFilters = searchQuery || statusFilter !== "all" || channelFilters.length > 0 || ackFilter !== "all" || dateFrom || dateTo;
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setChannelFilters([]);
+    setAckFilter("all");
+    setDateFrom(undefined);
+    setDateTo(undefined);
+  };
+
+  const toggleChannelFilter = (channel: string) => {
+    setChannelFilters(prev =>
+      prev.includes(channel) ? prev.filter(c => c !== channel) : [...prev, channel]
+    );
+  };
+
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter(notification => {
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesTitle = notification.title.toLowerCase().includes(query);
+        const matchesMessage = notification.message.toLowerCase().includes(query);
+        if (!matchesTitle && !matchesMessage) return false;
+      }
+
+      // Status filter
+      if (statusFilter !== "all" && notification.status !== statusFilter) {
+        return false;
+      }
+
+      // Channel filter
+      if (channelFilters.length > 0) {
+        const hasMatchingChannel = channelFilters.some(ch => 
+          notification.channels.includes(ch as "email" | "sms" | "portal")
+        );
+        if (!hasMatchingChannel) return false;
+      }
+
+      // Acknowledgement filter
+      if (ackFilter !== "all") {
+        const ackCount = notification.acknowledgedBy?.length || 0;
+        const totalRecipients = notification.recipients.length;
+        const isComplete = ackCount === totalRecipients;
+        const deadline = notification.acknowledgementSettings?.deadline 
+          ? new Date(notification.acknowledgementSettings.deadline) 
+          : null;
+        const isOverdue = deadline && new Date() > deadline && ackCount < totalRecipients;
+
+        switch (ackFilter) {
+          case "required":
+            if (!notification.requiresAcknowledgement) return false;
+            break;
+          case "not-required":
+            if (notification.requiresAcknowledgement) return false;
+            break;
+          case "complete":
+            if (!notification.requiresAcknowledgement || !isComplete) return false;
+            break;
+          case "pending":
+            if (!notification.requiresAcknowledgement || isComplete) return false;
+            break;
+          case "overdue":
+            if (!isOverdue) return false;
+            break;
+        }
+      }
+
+      // Date range filter
+      if (dateFrom && isBefore(notification.sentAt, startOfDay(dateFrom))) {
+        return false;
+      }
+      if (dateTo && isAfter(notification.sentAt, endOfDay(dateTo))) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [notifications, searchQuery, statusFilter, channelFilters, ackFilter, dateFrom, dateTo]);
 
   const getChannelIcon = (channel: string) => {
     switch (channel) {
@@ -196,7 +303,7 @@ const History = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="p-4 rounded-lg border border-border bg-card">
             <p className="text-sm text-muted-foreground">Total Sent</p>
             <p className="text-2xl font-bold">{notifications.length}</p>
@@ -221,6 +328,159 @@ const History = () => {
           </div>
         </div>
 
+        {/* Search and Filters */}
+        <div className="mb-6 p-4 rounded-lg border border-border bg-card space-y-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Filter className="w-4 h-4" />
+            Search & Filters
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Search */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Search</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search title or message..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Status</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="sent">Sent</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Acknowledgement Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Acknowledgement</Label>
+              <Select value={ackFilter} onValueChange={(v) => setAckFilter(v as AckFilterType)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="required">Required</SelectItem>
+                  <SelectItem value="not-required">Not Required</SelectItem>
+                  <SelectItem value="complete">Complete</SelectItem>
+                  <SelectItem value="pending">Pending Responses</SelectItem>
+                  <SelectItem value="overdue">Overdue</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Channel Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Channels</Label>
+              <div className="flex gap-2">
+                {["email", "sms", "portal"].map((channel) => (
+                  <Button
+                    key={channel}
+                    type="button"
+                    variant={channelFilters.includes(channel) ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => toggleChannelFilter(channel)}
+                    className="gap-1 capitalize"
+                  >
+                    {getChannelIcon(channel)}
+                    {channel}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Date Range */}
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Date From</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "w-[140px] justify-start text-left font-normal",
+                      !dateFrom && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateFrom ? format(dateFrom, "PP") : "From"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-popover" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dateFrom}
+                    onSelect={setDateFrom}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Date To</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "w-[140px] justify-start text-left font-normal",
+                      !dateTo && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateTo ? format(dateTo, "PP") : "To"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-popover" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dateTo}
+                    onSelect={setDateTo}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="text-muted-foreground"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Clear filters
+              </Button>
+            )}
+
+            <div className="ml-auto text-sm text-muted-foreground">
+              Showing {filteredNotifications.length} of {notifications.length} notifications
+            </div>
+          </div>
+        </div>
+
         {/* Table */}
         <div className="rounded-lg border border-border bg-card">
           <Table>
@@ -236,89 +496,114 @@ const History = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {notifications.map((notification) => {
-                const ackCount = notification.acknowledgedBy?.length || 0;
-                const totalRecipients = notification.recipients.length;
-                const needsReminder =
-                  notification.requiresAcknowledgement && ackCount < totalRecipients;
+              {filteredNotifications.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    No notifications match your filters
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredNotifications.map((notification) => {
+                  const ackCount = notification.acknowledgedBy?.length || 0;
+                  const totalRecipients = notification.recipients.length;
+                  const needsReminder =
+                    notification.requiresAcknowledgement && ackCount < totalRecipients;
+                  const deadline = notification.acknowledgementSettings?.deadline 
+                    ? new Date(notification.acknowledgementSettings.deadline) 
+                    : null;
+                  const isOverdue = deadline && new Date() > deadline && ackCount < totalRecipients;
 
-                return (
-                  <TableRow key={notification.id}>
-                    <TableCell className="font-medium">
-                      <div className="max-w-[230px]">
-                        <p className="truncate">{notification.title}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {notification.message.slice(0, 50)}...
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {notification.channels.map((channel) => (
-                          <Badge
-                            key={channel}
-                            variant="secondary"
-                            className="gap-1 text-xs"
-                          >
-                            {getChannelIcon(channel)}
-                            {channel}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Users className="w-4 h-4 text-muted-foreground" />
-                        <span>{totalRecipients}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{getStatusBadge(notification.status)}</TableCell>
-                    <TableCell>
-                      {notification.requiresAcknowledgement ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-success rounded-full transition-all"
-                              style={{
-                                width: `${(ackCount / totalRecipients) * 100}%`,
-                              }}
-                            />
-                          </div>
-                          <span className="text-sm text-muted-foreground">
-                            {ackCount}/{totalRecipients}
-                          </span>
+                  return (
+                    <TableRow key={notification.id}>
+                      <TableCell className="font-medium">
+                        <div className="max-w-[230px]">
+                          <p className="truncate">{notification.title}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {notification.message.slice(0, 50)}...
+                          </p>
                         </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">N/A</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {format(notification.sentAt, "MMM d, h:mm a")}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleViewDetails(notification)}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        {needsReminder && (
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {notification.channels.map((channel) => (
+                            <Badge
+                              key={channel}
+                              variant="secondary"
+                              className="gap-1 text-xs"
+                            >
+                              {getChannelIcon(channel)}
+                              {channel}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Users className="w-4 h-4 text-muted-foreground" />
+                          <span>{totalRecipients}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{getStatusBadge(notification.status)}</TableCell>
+                      <TableCell>
+                        {notification.requiresAcknowledgement ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full transition-all",
+                                  isOverdue ? "bg-destructive" : "bg-success"
+                                )}
+                                style={{
+                                  width: `${(ackCount / totalRecipients) * 100}%`,
+                                }}
+                              />
+                            </div>
+                            <span className={cn(
+                              "text-sm",
+                              isOverdue ? "text-destructive" : "text-muted-foreground"
+                            )}>
+                              {ackCount}/{totalRecipients}
+                            </span>
+                            {isOverdue && (
+                              <AlertTriangle className="w-3 h-3 text-destructive" />
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">N/A</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {format(notification.sentAt, "MMM d, h:mm a")}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleSendReminder(notification)}
-                            className="text-warning hover:text-warning"
+                            onClick={() => handleViewDetails(notification)}
                           >
-                            <RefreshCw className="w-4 h-4" />
+                            <Eye className="w-4 h-4" />
                           </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                          {needsReminder && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleSendReminder(notification)}
+                              className={cn(
+                                isOverdue 
+                                  ? "text-destructive hover:text-destructive" 
+                                  : "text-warning hover:text-warning"
+                              )}
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </div>
