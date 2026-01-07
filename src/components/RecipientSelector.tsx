@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -11,47 +11,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Users, X, Filter, Plus, ChevronDown } from "lucide-react";
+import { Search, Users, X, Filter, Plus, ChevronDown, Loader2 } from "lucide-react";
 
 export interface Employee {
   id: string;
   name: string;
   email: string;
-  department: string;
-  role: string;
-  location: string;
-  status: "active" | "inactive" | "on-leave";
+  department?: string;
+  role?: string;
+  location?: string;
+  status?: "active" | "inactive" | "on-leave";
+  mobile?: string;
 }
-
-// Mock employee data
-const mockEmployees: Employee[] = [
-  { id: "1", name: "Alice Johnson", email: "alice@company.com", department: "IT", role: "Developer", location: "New York", status: "active" },
-  { id: "2", name: "Bob Smith", email: "bob@company.com", department: "IT", role: "Manager", location: "New York", status: "active" },
-  { id: "3", name: "Carol Williams", email: "carol@company.com", department: "HR", role: "Recruiter", location: "Los Angeles", status: "active" },
-  { id: "4", name: "David Brown", email: "david@company.com", department: "HR", role: "Manager", location: "Chicago", status: "on-leave" },
-  { id: "5", name: "Eva Martinez", email: "eva@company.com", department: "Sales", role: "Representative", location: "Miami", status: "active" },
-  { id: "6", name: "Frank Garcia", email: "frank@company.com", department: "Sales", role: "Manager", location: "Houston", status: "active" },
-  { id: "7", name: "Grace Lee", email: "grace@company.com", department: "Operations", role: "Analyst", location: "Seattle", status: "active" },
-  { id: "8", name: "Henry Wilson", email: "henry@company.com", department: "Operations", role: "Manager", location: "Boston", status: "inactive" },
-  { id: "9", name: "Ivy Chen", email: "ivy@company.com", department: "IT", role: "Developer", location: "San Francisco", status: "active" },
-  { id: "10", name: "Jack Taylor", email: "jack@company.com", department: "IT", role: "DevOps", location: "Denver", status: "active" },
-  { id: "11", name: "Karen Davis", email: "karen@company.com", department: "HR", role: "Specialist", location: "Phoenix", status: "active" },
-  { id: "12", name: "Leo Anderson", email: "leo@company.com", department: "Sales", role: "Representative", location: "Atlanta", status: "on-leave" },
-  { id: "13", name: "Mia Thomas", email: "mia@company.com", department: "Operations", role: "Coordinator", location: "Dallas", status: "active" },
-  { id: "14", name: "Noah Jackson", email: "noah@company.com", department: "IT", role: "Architect", location: "Austin", status: "active" },
-  { id: "15", name: "Olivia White", email: "olivia@company.com", department: "HR", role: "Director", location: "New York", status: "active" },
-];
-
-const departments = ["All", "IT", "HR", "Sales", "Operations"];
-const roles = ["All", "Developer", "Manager", "Recruiter", "Representative", "Analyst", "DevOps", "Specialist", "Coordinator", "Architect", "Director"];
-const locations = ["All", "New York", "Los Angeles", "Chicago", "Miami", "Houston", "Seattle", "Boston", "San Francisco", "Denver", "Phoenix", "Atlanta", "Dallas", "Austin"];
-const statuses = ["All", "active", "inactive", "on-leave"];
 
 interface RecipientSelectorProps {
   selectedRecipients: Employee[];
@@ -64,24 +37,71 @@ export const RecipientSelector = ({
 }: RecipientSelectorProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("All");
+
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Keep it simple: Role + optional Status
   const [roleFilter, setRoleFilter] = useState("All");
-  const [locationFilter, setLocationFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
 
-  const filteredEmployees = useMemo(() => {
-    return mockEmployees.filter((emp) => {
-      const matchesSearch =
-        emp.name.toLowerCase().includes(search.toLowerCase()) ||
-        emp.email.toLowerCase().includes(search.toLowerCase());
-      const matchesDepartment = departmentFilter === "All" || emp.department === departmentFilter;
-      const matchesRole = roleFilter === "All" || emp.role === roleFilter;
-      const matchesLocation = locationFilter === "All" || emp.location === locationFilter;
-      const matchesStatus = statusFilter === "All" || emp.status === statusFilter;
+  const statuses = ["All", "active", "inactive", "on-leave"];
 
-      return matchesSearch && matchesDepartment && matchesRole && matchesLocation && matchesStatus;
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch("/notifications/get_employees", {
+          headers: { Accept: "application/json" },
+        });
+
+        if (!response.ok) {
+          console.error("Failed to fetch employees:", response.status);
+          setEmployees([]);
+          return;
+        }
+
+        const data = (await response.json()) as Employee[];
+        setEmployees(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Error loading employees:", error);
+        setEmployees([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchEmployees();
+  }, []);
+
+  // Build role dropdown dynamically from whatever Greentree returns
+  const roles = useMemo(() => {
+    const set = new Set<string>();
+    employees.forEach((e) => {
+      const r = (e.role || "").trim();
+      if (r) set.add(r);
     });
-  }, [search, departmentFilter, roleFilter, locationFilter, statusFilter]);
+    return ["All", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [employees]);
+
+  const filteredEmployees = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    return employees.filter((emp) => {
+      const name = (emp.name || "").toLowerCase();
+      const email = (emp.email || "").toLowerCase();
+
+      const matchesSearch = !q || name.includes(q) || email.includes(q);
+
+      const empRole = (emp.role || "").trim();
+      const matchesRole = roleFilter === "All" || empRole === roleFilter;
+
+      const empStatus = (emp.status || "active").trim();
+      const matchesStatus = statusFilter === "All" || empStatus === statusFilter;
+
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+  }, [employees, search, roleFilter, statusFilter]);
 
   const isSelected = (employee: Employee) =>
     selectedRecipients.some((r) => r.id === employee.id);
@@ -110,24 +130,18 @@ export const RecipientSelector = ({
 
   const clearFilters = () => {
     setSearch("");
-    setDepartmentFilter("All");
     setRoleFilter("All");
-    setLocationFilter("All");
     setStatusFilter("All");
   };
 
   const hasActiveFilters =
-    search !== "" ||
-    departmentFilter !== "All" ||
-    roleFilter !== "All" ||
-    locationFilter !== "All" ||
-    statusFilter !== "All";
+    search.trim() !== "" || roleFilter !== "All" || statusFilter !== "All";
 
   return (
     <div className="space-y-3">
       <Label>Recipients *</Label>
 
-      {/* Selected Recipients Display */}
+      {/* Selected recipients */}
       {selectedRecipients.length > 0 && (
         <div className="flex flex-wrap gap-2 p-3 rounded-lg border border-border bg-muted/30">
           {selectedRecipients.map((recipient) => (
@@ -141,6 +155,7 @@ export const RecipientSelector = ({
                 type="button"
                 onClick={() => removeRecipient(recipient.id)}
                 className="ml-1 hover:bg-muted rounded-full p-0.5"
+                aria-label={`Remove ${recipient.name}`}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -149,14 +164,10 @@ export const RecipientSelector = ({
         </div>
       )}
 
-      {/* Recipient Selector Dropdown */}
+      {/* Dropdown */}
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full justify-between"
-          >
+          <Button type="button" variant="outline" className="w-full justify-between">
             <span className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               {selectedRecipients.length > 0
@@ -166,7 +177,8 @@ export const RecipientSelector = ({
             <ChevronDown className="w-4 h-4 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[400px] p-0 bg-popover" align="start">
+
+        <PopoverContent className="w-[420px] p-0 bg-popover" align="start">
           <div className="p-3 border-b border-border space-y-3">
             {/* Search */}
             <div className="relative">
@@ -179,42 +191,16 @@ export const RecipientSelector = ({
               />
             </div>
 
-            {/* Filters */}
+            {/* Filters: Role + (optional) Status */}
             <div className="grid grid-cols-2 gap-2">
-              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Department" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  {departments.map((dept) => (
-                    <SelectItem key={dept} value={dept}>
-                      {dept === "All" ? "All Departments" : dept}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
               <Select value={roleFilter} onValueChange={setRoleFilter}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Role" />
                 </SelectTrigger>
-                <SelectContent className="bg-popover">
+                <SelectContent className="bg-popover max-h-[220px] overflow-auto">
                   {roles.map((role) => (
                     <SelectItem key={role} value={role}>
                       {role === "All" ? "All Roles" : role}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={locationFilter} onValueChange={setLocationFilter}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Location" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  {locations.map((loc) => (
-                    <SelectItem key={loc} value={loc}>
-                      {loc === "All" ? "All Locations" : loc}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -227,14 +213,17 @@ export const RecipientSelector = ({
                 <SelectContent className="bg-popover">
                   {statuses.map((status) => (
                     <SelectItem key={status} value={status}>
-                      {status === "All" ? "All Statuses" : status.charAt(0).toUpperCase() + status.slice(1).replace("-", " ")}
+                      {status === "All"
+                        ? "All Statuses"
+                        : status.charAt(0).toUpperCase() +
+                          status.slice(1).replace("-", " ")}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Filter Actions */}
+            {/* Actions */}
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
                 {filteredEmployees.length} employee(s) found
@@ -267,43 +256,61 @@ export const RecipientSelector = ({
             </div>
           </div>
 
-          {/* Employee List */}
-          <ScrollArea className="h-[250px]">
-            {filteredEmployees.length === 0 ? (
+          {/* List */}
+          <ScrollArea className="h-[260px]">
+            {isLoading ? (
+              <div className="p-8 flex justify-center text-muted-foreground">
+                <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                Loading staff...
+              </div>
+            ) : filteredEmployees.length === 0 ? (
               <div className="p-4 text-center text-muted-foreground text-sm">
                 No employees match your filters
               </div>
             ) : (
               <div className="p-2">
-                {filteredEmployees.map((employee) => (
-                  <div
-                    key={employee.id}
-                    className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer"
-                    onClick={() => toggleEmployee(employee)}
-                  >
-                    <Checkbox checked={isSelected(employee)} />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">
-                        {employee.name}
-                      </div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {employee.role} • {employee.department} • {employee.location}
-                      </div>
-                    </div>
-                    <Badge
-                      variant={
-                        employee.status === "active"
-                          ? "default"
-                          : employee.status === "on-leave"
-                          ? "secondary"
-                          : "outline"
-                      }
-                      className="text-xs shrink-0"
+                {filteredEmployees.map((employee) => {
+                  const status = employee.status || "active";
+                  const subtitleParts = [
+                    employee.role || "",
+                    employee.department || "",
+                    employee.location || "",
+                  ].filter(Boolean);
+
+                  return (
+                    <div
+                      key={employee.id}
+                      className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer"
+                      onClick={() => toggleEmployee(employee)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") toggleEmployee(employee);
+                      }}
                     >
-                      {employee.status}
-                    </Badge>
-                  </div>
-                ))}
+                      <Checkbox checked={isSelected(employee)} />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm truncate">{employee.name}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {subtitleParts.join(" • ")}
+                        </div>
+                      </div>
+
+                      <Badge
+                        variant={
+                          status === "active"
+                            ? "default"
+                            : status === "on-leave"
+                            ? "secondary"
+                            : "outline"
+                        }
+                        className="text-xs shrink-0"
+                      >
+                        {status}
+                      </Badge>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </ScrollArea>
