@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Bell, Send, ArrowLeft, Eye, RefreshCw, Mail, MessageSquare, CheckCircle2, Clock, XCircle, Users, Search, Filter, X, CalendarIcon, AlertTriangle, Download } from "lucide-react";
+import { Bell, Send, ArrowLeft, Eye, RefreshCw, Mail, MessageSquare, CheckCircle2, Clock, XCircle, Users, Search, Filter, X, CalendarIcon, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -265,66 +265,6 @@ const History = () => {
     toast({
       title: "Reminder Sent",
       description: `Reminder sent to ${unacknowledged.length} recipient(s) who haven't acknowledged.`,
-    });
-  };
-
-  const handleDownloadCSV = (notification: Notification) => {
-    const responses = notification.acknowledgementResponses || [];
-    const responseMap = new Map(responses.map(r => [r.recipientName, r]));
-    
-    // CSV header
-    const headers = ["Recipient", "Status", "Response", "Comments", "Response Time"];
-    
-    // Build rows for all recipients
-    const rows = notification.recipients.map(recipient => {
-      const response = responseMap.get(recipient);
-      if (response) {
-        return [
-          recipient,
-          "Responded",
-          response.selectedOption,
-          response.comment || "",
-          format(new Date(response.respondedAt), "yyyy-MM-dd HH:mm:ss")
-        ];
-      } else {
-        return [
-          recipient,
-          "Pending",
-          "",
-          "",
-          ""
-        ];
-      }
-    });
-
-    // Escape CSV values
-    const escapeCSV = (value: string) => {
-      if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-        return `"${value.replace(/"/g, '""')}"`;
-      }
-      return value;
-    };
-
-    // Build CSV content
-    const csvContent = [
-      headers.map(escapeCSV).join(","),
-      ...rows.map(row => row.map(escapeCSV).join(","))
-    ].join("\n");
-
-    // Create and download file
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `${notification.title.replace(/[^a-z0-9]/gi, "_")}_responses.csv`);
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    toast({
-      title: "CSV Downloaded",
-      description: `Response summary for "${notification.title}" has been downloaded.`,
     });
   };
 
@@ -636,25 +576,14 @@ const History = () => {
                         {format(notification.sentAt, "MMM d, h:mm a")}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
+                        <div className="flex justify-end gap-2">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleViewDetails(notification)}
-                            title="View details"
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
-                          {notification.requiresAcknowledgement && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDownloadCSV(notification)}
-                              title="Download responses CSV"
-                            >
-                              <Download className="w-4 h-4" />
-                            </Button>
-                          )}
                           {needsReminder && (
                             <Button
                               variant="ghost"
@@ -665,7 +594,6 @@ const History = () => {
                                   ? "text-destructive hover:text-destructive" 
                                   : "text-warning hover:text-warning"
                               )}
-                              title="Send reminder"
                             >
                               <RefreshCw className="w-4 h-4" />
                             </Button>

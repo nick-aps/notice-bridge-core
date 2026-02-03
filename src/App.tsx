@@ -14,13 +14,8 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      {/* FIX: Added basename so React knows it lives in a subfolder.
-         It will now treat "/notifications-ui" as the root "/" 
-      */}
-      <BrowserRouter basename="/notifications-ui">
+      <BrowserRouter>
         <Routes>
-          {/* ADD THIS: Handle the explicit index.html path */}
-          <Route path="/index.html" element={<Index />} />
           <Route path="/" element={<Index />} />
           <Route path="/history" element={<History />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

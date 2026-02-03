@@ -53,8 +53,6 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
   const [newOptionText, setNewOptionText] = useState("");
   const [selectedRecipients, setSelectedRecipients] = useState<Employee[]>([]);
   const [isSendingTest, setIsSendingTest] = useState(false);
-  // New state to track real sending status
-  const [isSending, setIsSending] = useState(false);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [deliveryType, setDeliveryType] = useState<"immediate" | "scheduled">("immediate");
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
@@ -172,7 +170,7 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
 
     setIsSendingTest(true);
 
-    // Simulate sending test notifications
+    // Simulate sending test notifications (in production, this would call edge functions)
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     setIsSendingTest(false);
@@ -199,13 +197,9 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
     });
   };
 
-  // ----------------------------------------------------------------------
-  // UPDATE: This is the main "Send" logic connected to your PHP Backend
-  // ----------------------------------------------------------------------
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // 1. Validation
     if (!title || channels.length === 0 || selectedRecipients.length === 0 || !hasValidMessages()) {
       toast({
         title: "Missing Information",
@@ -224,11 +218,10 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
       return;
     }
 
-    setIsSending(true);
+    const recipientNames = selectedRecipients.map((r) => r.name);
 
-    try {
-      // 2. Prepare Payload for PHP
-      const combinedMessage = channels
+    // Combine messages for storage (in production, would store separately per channel)
+    const combinedMessage = channels
       .map((ch) => {
         if (ch === "email") return `[Email] ${channelMessages.email.content}`;
         if (ch === "portal") return `[Portal] ${channelMessages.portal.content}`;
@@ -237,75 +230,41 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
       })
       .join("\n\n");
 
-      const acknowledgementSettings: AcknowledgementSettings | undefined = requiresAcknowledgement
-        ? {
-            required: true,
-            responseOptions: acknowledgementOptions,
-            allowComments: allowAcknowledgementComments,
-            deadline: acknowledgementDeadline,
-          }
-        : undefined;
+    const acknowledgementSettings: AcknowledgementSettings | undefined = requiresAcknowledgement
+      ? {
+          required: true,
+          responseOptions: acknowledgementOptions,
+          allowComments: allowAcknowledgementComments,
+          deadline: acknowledgementDeadline,
+        }
+      : undefined;
 
-      const payload = {
-        title,
-        message: combinedMessage,
-        channels,
-        recipients: selectedRecipients, // Sends the full employee objects (ID, Name, Mobile, Email)
-        requiresAcknowledgement,
-        acknowledgementSettings,
-        deliveryType,
-        scheduledDate: deliveryType === 'scheduled' ? scheduledDate : null,
-        scheduledTime: deliveryType === 'scheduled' ? scheduledTime : null
-      };
+    onSend({
+      title,
+      message: combinedMessage,
+      channels,
+      recipients: recipientNames,
+      requiresAcknowledgement,
+      acknowledgementSettings,
+    });
 
-      // 3. Call the PHP API
-      // Note: This URL must match the controller route we created
-      const response = await fetch('/notifications/api_send', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
+    if (deliveryType === "scheduled" && scheduledDate) {
+      const [hours, minutes] = scheduledTime.split(":").map(Number);
+      const scheduledDateTime = new Date(scheduledDate);
+      scheduledDateTime.setHours(hours, minutes);
+
+      toast({
+        title: "Notification Scheduled",
+        description: `Your notification will be sent on ${format(scheduledDateTime, "PPP 'at' p")} to ${recipientNames.length} recipient(s).`,
       });
-
-      const result = await response.json();
-
-      if (!response.ok || (result.status && result.status === 'error')) {
-         throw new Error(result.error || 'Server error occurred');
-      }
-
-      // 4. Success Handling
+    } else {
       toast({
         title: "Notification Sent",
-        description: `Successfully processed ${result.stats?.email_count || 0} emails.`,
+        description: `Your notification has been sent to ${recipientNames.length} recipient(s) via ${channels.join(", ")}.`,
       });
-
-      // Call the parent handler (if needed for UI updates)
-      const recipientNames = selectedRecipients.map((r) => r.name);
-      onSend({
-        title,
-        message: combinedMessage,
-        channels,
-        recipients: recipientNames,
-        requiresAcknowledgement,
-        acknowledgementSettings,
-      });
-
-      resetForm();
-
-    } catch (error) {
-      console.error("Send failed:", error);
-      toast({
-        title: "Send Failed",
-        description: "Could not connect to the server or sending failed.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSending(false);
     }
-  };
 
-  const resetForm = () => {
+    // Reset form
     setTitle("");
     setChannels([]);
     setChannelMessages(initialMessages);
@@ -318,6 +277,18 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
     setDeliveryType("immediate");
     setScheduledDate(undefined);
     setScheduledTime("09:00");
+  };
+
+  const resetForm = () => {
+    setTitle("");
+    setChannels([]);
+    setChannelMessages(initialMessages);
+    setRequiresAcknowledgement(false);
+    setAcknowledgementOptions(DEFAULT_ACKNOWLEDGEMENT_OPTIONS);
+    setAllowAcknowledgementComments(false);
+    setAcknowledgementDeadline(undefined);
+    setNewOptionText("");
+    setSelectedRecipients([]);
   };
 
   const handleAddOption = () => {
@@ -364,7 +335,7 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
                     onClick={() => handleDeleteDraft(draft.id)}
                     className="text-muted-foreground hover:text-destructive ml-1"
                   >
-                    <X className="w-3 h-3" />
+                    ×
                   </button>
                 </div>
               ))}
@@ -709,18 +680,8 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-3">
-              <Button 
-                type="submit" 
-                className="flex-1" 
-                size="lg"
-                disabled={isSending} // Disable while sending
-              >
-                {isSending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Sending...
-                  </>
-                ) : deliveryType === "scheduled" ? (
+              <Button type="submit" className="flex-1" size="lg">
+                {deliveryType === "scheduled" ? (
                   <>
                     <CalendarIcon className="w-4 h-4 mr-2" />
                     Schedule Notification
@@ -739,7 +700,7 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
                   variant="outline"
                   size="lg"
                   onClick={handleSaveDraft}
-                  disabled={!hasAnyContent() || isSending}
+                  disabled={!hasAnyContent()}
                 >
                   <Save className="w-4 h-4 mr-2" />
                   Save Draft
@@ -750,7 +711,7 @@ export const ComposeNotification = ({ onSend }: ComposeNotificationProps) => {
                   variant="outline"
                   size="lg"
                   onClick={handleSendTestNotification}
-                  disabled={channels.length === 0 || !hasValidMessages() || isSendingTest || isSending}
+                  disabled={channels.length === 0 || !hasValidMessages() || isSendingTest}
                 >
                   {isSendingTest ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
